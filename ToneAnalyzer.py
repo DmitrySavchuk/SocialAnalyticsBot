@@ -1,5 +1,7 @@
 import json
 import requests
+import pygal
+import sys
 
 
 class ToneAnalyzer:
@@ -8,10 +10,18 @@ class ToneAnalyzer:
         self.password = 'uJqpULCLFnjm'
         self.watson_url = 'https://gateway.watsonplatform.net/tone-analyzer/api/v3/tone?version=2016-05-18'
         self.headers = {"content-type": "text/plain"}
-        self.data = text
+        self.text_limit = 10000
+
+        while sys.getsizeof(text) > self.text_limit:
+            text = text[:-1000]
+
+        self.data = text[:]
+        self.json_data = 0
 
     def analyze_tone(self):
-        json_analyze = self.__analyze_tone()
+        self.json_data = self.__analyze_tone()
+
+        json_analyze = self.json_data[:]
 
         return self.__transform_results(json_analyze)
 
@@ -23,13 +33,40 @@ class ToneAnalyzer:
         except():
             return False
 
+    def plotting(self):
+        data = json.loads(str(self.json_data[:]))
+
+        for cathegory in data['document_tone']['tone_categories']:
+            chart = pygal.Pie()
+
+            chart.title = cathegory['category_name']
+            tone_names = []
+            number_data = []
+            for tone in cathegory['tones']:
+                tone_names.append(tone['tone_name'])
+                number_data.append(int(round(tone['score'] * 100, 1)))
+
+            summ = 1
+            for tone_number in number_data:
+                summ += tone_number
+
+            for tone_number in number_data:
+                tone_number /= summ
+
+            i = 0
+            while i < len(tone_names):
+                chart.add(tone_names[i], number_data[i])
+                i += 1
+
+            chart.render_to_png(cathegory['category_name'] + '.png')
+
     def __transform_results(self, json_analyze):
         analyze = json.loads(str(json_analyze))
         text_answer = ''
-        for i in analyze['document_tone']['tone_categories']:
-            text_answer += i['category_name'] + '\n' + ("-" * len(i['category_name'])) + '\n'
-            for j in i['tones']:
-                text_answer += j['tone_name'].ljust(20) + (str(round(j['score'] * 100, 1)) + "%").ljust(10) + '\n'
+        for cathegory in analyze['document_tone']['tone_categories']:
+            text_answer += cathegory['category_name'] + '\n' + ("-" * len(cathegory['category_name'])) + '\n'
+            for tone in cathegory['tones']:
+                text_answer += tone['tone_name'].ljust(20) + (str(round(tone['score'] * 100, 1)) + "%").ljust(10) + '\n'
             text_answer += '\n'
         return text_answer
 
